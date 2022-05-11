@@ -137,8 +137,6 @@ def annotation_log(id):
 
 """Subscription management handler
 """
-import stripe
-
 @app.route('/subscribe', methods=['GET', 'POST'])
 @authenticated
 def subscribe():
@@ -150,30 +148,6 @@ def subscribe():
       return redirect(url_for('profile'))
 
   elif (request.method == 'POST'):
-    # Process the subscription request
-    token = str(request.form['stripe_token']).strip()
-
-    # Create a customer on Stripe
-    stripe.api_key = app.config['STRIPE_SECRET_KEY']
-    try:
-      customer = stripe.Customer.create(
-        card = token,
-        email = session.get('email'),
-        description = session.get('name')
-      )
-    except Exception as e:
-      app.logger.error(f"Failed to create customer billing record: {e}")
-      return abort(500)
-
-    try:
-      subscription = stripe.Subscription.create(
-        customer=customer.id,
-        items=[{ 'price': app.config['STRIPE_PRICE_ID'] }]
-      )
-    except Exception as e:
-      app.logger.error(f"Failed to create customer's subscription: {e}")
-      return abort(500)
-
     # Update user role to allow access to paid features
     update_profile(
       identity_id=session['primary_identity'],
@@ -188,9 +162,7 @@ def subscribe():
     # Make sure you handle files not yet archived!
 
     # Display confirmation page
-    return render_template('subscribe_confirm.html', 
-      stripe_customer_id=str(customer['id']))
-
+    return render_template('subscribe_confirm.html') 
 
 """Reset subscription
 """

@@ -77,19 +77,6 @@ class Config(object):
   GAS_CLIENT_SECRET = globus_auth['gas_client_secret']
   GLOBUS_AUTH_LOGOUT_URI = "https://auth.globus.org/v2/web/logout"
 
-  # Get the Stripe API credentials from ASM
-  try:
-    asm_response = asm.get_secret_value(SecretId='stripe/mpcs_dev_account')
-    stripe_keys = json.loads(asm_response['SecretString'])
-  except ClientError as e:
-    print(f"Unable to retrieve Stripe API credentials from ASM: {e}")
-    raise e
-
-  # Set Stripe API keys
-  STRIPE_PUBLIC_KEY = stripe_keys['api_public_key']
-  STRIPE_SECRET_KEY = stripe_keys['api_secret_key']
-  STRIPE_PRICE_ID = 'price_1IrlqHAlkJ222N75PaHEk92A'
-
   # Set validity of pre-signed POST requests (in seconds)
   AWS_SIGNED_REQUEST_EXPIRATION = 60
 

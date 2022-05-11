@@ -13,50 +13,12 @@ University of Chicago
       <h1>Subscribe</h1>
     </div>
 
-    <p>You are subscribing to the GAS Premium plan. Please enter your credit card details to complete your subscription.</p><br />
+    <p>You are subscribing to the GAS Premium plan. Lucky for you, payment is no longer required for subscriptions thanks to our unexpectedly short project this year!</p><br />
 
     <div class="form-wrapper">
       <form role="form" action="{{url_for('subscribe')}}" method="post" id="subscribe_form" name="subscribe_submit">     
-        <span class="payment-errors"></span>
-
-        <div class="row">
-          <div class="form-group col-md-4">
-            <label>Name on Credit Card</label>
-            <input class="form-control input-lg required" type="text" data-stripe="name" />
-          </div>
-        </div>
-
-        <div class="row">
-          <div class="form-group col-md-4">
-            <label>Credit Card Number</label>
-            <input class="form-control input-lg required" type="text" size="20" data-stripe="number" />
-          </div>
-        </div>
-
-        <div class="row">
-          <div class="form-group col-md-4">
-            <label>Verification Code</label>
-            <input class="form-control input-lg required" type="text" data-stripe="cvc" />
-          </div>
-        </div>
-
-        <div class="row">
-          <div class="form-group col-md-4">
-            <label>Expiration Month</label>
-            <input class="form-control input-lg required" type="text" size="2" data-stripe="exp-month" />
-          </div>
-        </div>
-
-        <div class="row">
-          <div class="form-group col-md-4">
-            <label>Expiration Year</label>
-            <input class="form-control input-lg required" type="text" size="4" data-stripe="exp-year" />
-          </div>
-        </div>
-        
-        <br />
         <div class="form-actions">
-          <input id="bill-me" class="btn btn-lg btn-primary" type="submit" value="Subscribe (your credit card will be billed)">
+          <input id="bill-me" class="btn btn-lg btn-primary" type="submit" value="Subscribe!">
         </div>
       </form>
     </div>
