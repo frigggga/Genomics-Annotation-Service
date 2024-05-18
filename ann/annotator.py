@@ -29,19 +29,11 @@ def process_annotations():
         #TODO: what is urldql?
         url_dql = sqs.get_queue_url(QueueName=queue_name_dlq)['QueueUrl']
     except botocore.exceptions.ClientError as e:  # Queue Not Found
-        code = e.response['Error']['Code']
-        if code == 'QueueDoesNotExist':
-            print({
-                'code': 500,
-                'status': 'Queue Does Not Exist',
-                'message': f'Queue <{queue_name}> does not exist.'
-            })
-        else:
-            print({
-                'code': 500,
-                'status': 'Server Error',
-                'message': f'An error occurred: {e}'
-            })
+        print({
+            'code': 500,
+            'status': 'Server Error',
+            'message': f'An error occurred: {e}'
+        })
 
     print('... checking for messages ...')
 
@@ -62,6 +54,7 @@ def process_annotations():
         user_id = message['user_id']
         uuid = message['job_id']
         filename = message['input_file_name']
+        user_email = message['user_email']
         bucket_name = message['s3_inputs_bucket']
 
         # Save the file in a unique path
@@ -86,7 +79,7 @@ def process_annotations():
             continue
 
         try:
-            subprocess.Popen(['python', 'hw5_run.py', file_path, dir_path, user_id, uuid])
+            subprocess.Popen(['python', 'hw5_run.py', file_path, dir_path, user_id, uuid, user_email])
         except subprocess.CalledProcessError as e:
             print({'code': 500, 'status': 'error', 'message': f'Failed to launch annotation job: {str(e)}'})
 

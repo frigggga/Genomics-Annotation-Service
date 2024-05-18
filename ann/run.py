@@ -1,5 +1,3 @@
-
-
 import sys
 import time
 import boto3
@@ -8,7 +6,7 @@ import botocore
 from configparser import ConfigParser
 
 sys.path.append('/home/ec2-user/mpcs-cc/gas/ann/anntools')
-import driver # From above path
+import driver  # From above path
 
 """A rudimentary timer for coarse-grained profiling
 """
@@ -16,6 +14,7 @@ import driver # From above path
 CONFIG_FILE = '/home/ec2-user/mpcs-cc/gas/ann/ann_config.ini'
 config = ConfigParser()
 config.read_file(open(CONFIG_FILE))
+
 
 class Timer(object):
     def __init__(self, verbose=True):
@@ -31,6 +30,7 @@ class Timer(object):
         if self.verbose:
             print(f"Approximate runtime: {self.secs:.2f} seconds")
 
+
 # source: https://docs.aws.amazon.com/AmazonS3/latest/userguide/download-objects.html
 if __name__ == '__main__':
     # Call the AnnTools pipeline
@@ -43,6 +43,7 @@ if __name__ == '__main__':
         files = os.listdir(sys.argv[2])
         user_id = sys.argv[3]
         job_id = sys.argv[4]
+        user_email = sys.argv[5]
 
         for filename in files:
             local_path = os.path.join(sys.argv[2], filename)
@@ -88,7 +89,27 @@ if __name__ == '__main__':
         except botocore.exceptions.ClientError:
             print('error updating table.')
 
+        # Send user email notifications
+        sns = boto3.client('sns')
+        message = str({
+            'filename': sys.argv[1],
+            'job_id': job_id,
+            'user_email': user_email,
+            'job_status': 'COMPLETED'
+
+        })
+
+        try:  # Publish SNS message
+            response = sns.publish(
+                TopicArn=config.get('AWS', 'AWS_SNS_JOB_COMPLETE_TOPIC'),
+                Message=message
+            )
+        except botocore.exceptions.ClientError as e:  # Topic not found
+            print({
+                'code': 'HTTP_500_INTERNAL_SERVER_ERROR',
+                'status': 'error',
+                'message': 'Error publishing file annotation results to sqs queue'
+            })
 
     else:
         print("A valid .vcf file must be provided as input to this program.")
-
