@@ -92,9 +92,9 @@ class Config(object):
 
   # Change the ARNs below to reflect your SNS topics
   AWS_SNS_JOB_REQUEST_TOPIC = \
-    "some-arn-job-requests:ishaz_job_requests"
+    "arn:aws:sns:us-east-1:659248683008:ishaz_job_requests"
   AWS_SNS_JOB_COMPLETE_TOPIC = \
-    "some-arn-job-results:ishaz_job_results"
+    "arn:aws:sns:us-east-1:659248683008:ishaz_job_results"
 
   # Change the table name to your own
   AWS_DYNAMODB_ANNOTATIONS_TABLE = "ishaz_annotations"

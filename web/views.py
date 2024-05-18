@@ -14,6 +14,7 @@ import json
 from datetime import datetime
 
 import boto3
+import botocore
 from boto3.dynamodb.conditions import Key
 from botocore.client import Config
 from botocore.exceptions import ClientError
@@ -98,14 +99,60 @@ def create_annotation_job_request():
   s3_key = str(request.args.get('key'))
 
   # Extract the job ID from the S3 key
+  owner, _, uu_id_and_file_name = s3_key.split('/')
+  uu_id, file_name = uu_id_and_file_name.split('~')
+  user_id = session['primary_identity']  # Globus Identity ID is a UUID
+
+  if not file_name.endswith('.vcf'):  # File still gets uploaded though
+    abort(405)
+
+  if uu_id == None or file_name == None or file_name == "":
+    abort(405)
 
   # Persist job to database
-  # Move your code here...
+
+  dynamodb = boto3.client('dynamodb')
+  dynamo_table = dynamodb.Table(app.config['AWS_DYNAMODB_ANNOTATIONS_TABLE'])
+
+  data = {
+    "job_id": str(uu_id),
+    "user_id": str(user_id),
+    'input_file_name': str(file_name),
+    's3_inputs_bucket': bucket_name,
+    's3_key_input_file': s3_key,
+    'submit_time': int(time.time()),
+    'job_status': 'PENDING'
+  }
+
+  try:
+    dynamo_table.put_item(
+      Item=data,
+      ConditionExpression='attribute_not_exists(job_id)'
+    )
+  except botocore.exceptions.ClientError as e:  # Job was already uploaded to cloud
+    code = e.response['Error']['Code']
+    if code == 'ConditionalCheckFailedException':
+      abort(405)
+    else:
+      abort(500)
 
   # Send message to request queue
-  # Move your code here...
+  sns = boto3.client('sns')
+  try:
+    user_email = session['email']
+    data['user_email'] = str(user_email)
+    response = sns.publish(
+      TopicArn=app.config['AWS_SNS_JOB_REQUEST_TOPIC'],
+      Message=str(data)
+    )
+  except botocore.exceptions.ClientError as e:  # Topic not found
+    code = e.response['Error']['Code']
+    if code == 'NotFound':
+      abort(404)
+    else:
+      abort(500)
 
-  return render_template('annotate_confirm.html', job_id=job_id)
+  return render_template('annotate_confirm.html', job_id=uu_id)
 
 
 """List all annotations for the user
