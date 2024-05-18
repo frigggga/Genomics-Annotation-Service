@@ -4,6 +4,7 @@ import json
 import boto3
 import botocore
 from configparser import ConfigParser
+import ast
 
 jobs_dir = './jobs'
 
@@ -22,12 +23,12 @@ def process_annotations():
     config.read_file(open(CONFIG_FILE))
 
     queue_name = config.get('AWS', 'SQSRequestsQueueName')
-    queue_name_dlq = config.get('AWS', 'SQSRequestsDLQQueueName')
+    # queue_name_dlq = config.get('AWS', 'SQSRequestsDLQQueueName')
 
     try:
         queue_url = sqs.get_queue_url(QueueName=queue_name)['QueueUrl']
         #TODO: what is urldql?
-        url_dql = sqs.get_queue_url(QueueName=queue_name_dlq)['QueueUrl']
+        # url_dql = sqs.get_queue_url(QueueName=queue_name_dlq)['QueueUrl']
     except botocore.exceptions.ClientError as e:  # Queue Not Found
         print({
             'code': 500,
@@ -43,9 +44,9 @@ def process_annotations():
             queue = sqs.receive_message(
             QueueUrl=queue_url, AttributeNames=['All'], MaxNumberOfMessages=1,
             WaitTimeSeconds=20)
-            receipt_handle = queue['Messages'][0]['ReceiptHandle']
-            message_json = json.loads(queue['Messages'][0]['Body'])
-            message = json.loads(message_json['Message'])
+            receipt_handle = queue["Messages"][0]["ReceiptHandle"]
+            message_json = json.loads(queue["Messages"][0]["Body"])
+            message = ast.literal_eval(message_json["Message"])
         except KeyError:
             # since there's no messages in the queue, keep listening...
             continue
@@ -79,9 +80,10 @@ def process_annotations():
             continue
 
         try:
-            subprocess.Popen(['python', 'hw5_run.py', file_path, dir_path, user_id, uuid, user_email])
+            subprocess.Popen(['python', 'run.py', file_path, dir_path, user_id, uuid, user_email])
         except subprocess.CalledProcessError as e:
             print({'code': 500, 'status': 'error', 'message': f'Failed to launch annotation job: {str(e)}'})
+            continue
 
         try:
             ann_table.update_item(

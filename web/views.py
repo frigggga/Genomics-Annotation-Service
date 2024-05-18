@@ -26,9 +26,9 @@ from gas import app, db
 from decorators import authenticated, is_premium
 from auth import get_profile, update_profile
 
-sns = boto3.client('sns')
-dynamodb = boto3.client('dynamodb')
-s3 = boto3.client('s3',
+sns = boto3.resource('sns')
+dynamodb = boto3.resource('dynamodb')
+s3 = boto3.resource('s3',
                   region_name=app.config['AWS_REGION_NAME'],
                   config=Config(signature_version='s3v4'))
 
@@ -177,7 +177,7 @@ def annotations_list():
 
     jobs = response['Items']
     for job in jobs:
-        job['submit_time'] = datetime.fromtimestamp(job['submit_time'])
+        job['submit_time'] = time.asctime(time.localtime(float(job['submit_time'])))
 
     return render_template('annotations.html', annotations=jobs)
 
@@ -191,7 +191,9 @@ def annotation_details(id):
 
     try:
         ann_table = dynamodb.Table(app.config['AWS_DYNAMODB_ANNOTATIONS_TABLE'])
-        response = ann_table.get_item(Key={'job_id': id})
+        response = ann_table.query(
+            KeyConditionExpression=Key('job_id').eq(id)
+        )
         annotation = response['Items'][0]
 
     except botocore.exceptions.ClientError:
@@ -200,14 +202,17 @@ def annotation_details(id):
     if annotation['user_id'] != session['primary_identity']:
         abort(403)
 
-    annotation['submit_time'] = datetime.fromtimestamp(annotation['submit_time'])
+    annotation['submit_time'] = time.asctime(time.localtime(float(annotation['submit_time'])))
 
     free_access_expired = False
     restore_message = False
+    app.logger.info(annotation['s3_key_log_file'])
     if annotation['job_status'] == 'COMPLETED':
+        complete_time = float(annotation['complete_time'])
+        annotation['complete_time'] = complete_time
         if (session['role'] == 'free_user' and time.time() - annotation['complete_time'] >= app.config['FREE_USER_DATA_RETENTION']):
             free_access_expired = True
-        annotation['complete_time'] = datetime.fromtimestamp(annotation['complete_time'])
+        annotation['complete_time'] = time.asctime(time.localtime(complete_time))
         annotation['result_file_url'] = create_presigned_download_url(annotation['s3_key_result_file'])
 
     return render_template('annotation_details.html', annotation=annotation, free_access_expired=free_access_expired)
@@ -219,12 +224,29 @@ def annotation_details(id):
 # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Object.get
 @app.route('/annotations/<id>/log', methods=['GET'])
 @authenticated
-def annotation_log(id, s3_key):
+def annotation_log(id):
 
     bucket_name = app.config['AWS_S3_RESULTS_BUCKET']
+
+    try:
+        ann_table = dynamodb.Table(app.config['AWS_DYNAMODB_ANNOTATIONS_TABLE'])
+        response = ann_table.query(
+            KeyConditionExpression=Key('job_id').eq(id)
+        )
+        annotation = response['Items'][0]
+
+    except botocore.exceptions.ClientError:
+        abort(500)
+
+    if annotation['user_id'] != session['primary_identity']:
+        abort(403)
+
+    s3_key = annotation['s3_key_log_file']
+
     try:
         object = s3.Object(bucket_name, s3_key)
         content = object.get()['Body'].read().decode()
+
     except botocore.exceptions.ClientError as e:
         app.logger.info(e)
         abort(500)
@@ -282,13 +304,15 @@ def unsubscribe():
 
  # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.generate_presigned_url
 def  create_presigned_download_url(result_object_key):
-    encryption = app.config['AWS_S3_ENCRYPTION']
-    acl = app.config['AWS_S3_ACL']
+    s3 = boto3.client('s3',
+                      region_name=app.config['AWS_REGION_NAME'],
+                      config=Config(signature_version='s3v4'))
+
     result_bucket = app.config['AWS_S3_RESULTS_BUCKET']
 
     # Generate the presigned POST call
     try:
-        response = s3.generate_presigned_post(
+        response = s3.generate_presigned_url(
             ClientMethod='get_object',
             Params={
                 'Bucket': result_bucket,
