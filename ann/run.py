@@ -4,9 +4,7 @@ import boto3
 import os
 import botocore
 from configparser import ConfigParser
-
-sys.path.append('/home/ec2-user/mpcs-cc/gas/ann/anntools')
-import driver  # From above path
+import driver
 
 """A rudimentary timer for coarse-grained profiling
 """
