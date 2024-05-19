@@ -20,7 +20,6 @@ import helpers
 
 # Get configuration
 from configparser import SafeConfigParser
-
 config = SafeConfigParser(os.environ)
 config.read('archive_config.ini')
 
@@ -94,9 +93,10 @@ def archive_result():
                 ann_table = dynamodb.Table(config.get('AWS', 'DynamoDBTable'))
                 ann_table.update_item(
                     Key={'job_id': uuid},
-                    UpdateExpression="set results_file_archive_id = :a",
+                    UpdateExpression="set results_file_archive_id = :a, is_restored = :r",
                     ExpressionAttributeValues={
-                        ':a': archive_id
+                        ':a': archive_id,
+                        ':r': False
                     },
                     ReturnValues="UPDATED_NEW"
                 )

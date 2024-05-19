@@ -26,12 +26,11 @@ from gas import app, db
 from decorators import authenticated, is_premium
 from auth import get_profile, update_profile
 
-sns = boto3.resource('sns')
-dynamodb = boto3.resource('dynamodb')
+sns = boto3.client('sns', region_name=app.config['AWS_REGION_NAME'])
+dynamodb = boto3.resource('dynamodb', region_name=app.config['AWS_REGION_NAME'])
 s3 = boto3.resource('s3',
-                  region_name=app.config['AWS_REGION_NAME'],
-                  config=Config(signature_version='s3v4'))
-
+                    region_name=app.config['AWS_REGION_NAME'],
+                    config=Config(signature_version='s3v4'))
 
 """Start annotation request
 Create the required AWS S3 policy document and render a form for
@@ -40,6 +39,7 @@ uploading an annotation input file using the policy document.
 Note: You are welcome to use this code instead of your own
 but you can replace the code below with your own if you prefer.
 """
+
 
 @app.route('/annotate', methods=['GET'])
 @authenticated
@@ -94,6 +94,7 @@ publishes a notification for the annotator service.
 Note: Update/replace the code below with your own from previous
 homework assignments
 """
+
 
 @app.route('/annotate/job', methods=['GET'])
 @authenticated
@@ -158,6 +159,7 @@ def create_annotation_job_request():
 """List all annotations for the user
 """
 
+
 #  https://boto3.amazonaws.com/v1/documentation/api/latest/guide/dynamodb.html#querying-and-scanning
 @app.route('/annotations', methods=['GET'])
 @authenticated
@@ -185,10 +187,10 @@ def annotations_list():
 """Display details of a specific annotation job
 """
 
+
 @app.route('/annotations/<id>', methods=['GET'])
 @authenticated
 def annotation_details(id):
-
     try:
         ann_table = dynamodb.Table(app.config['AWS_DYNAMODB_ANNOTATIONS_TABLE'])
         response = ann_table.query(
@@ -205,27 +207,30 @@ def annotation_details(id):
     annotation['submit_time'] = time.asctime(time.localtime(float(annotation['submit_time'])))
 
     free_access_expired = False
-    restore_message = False
     app.logger.info(annotation['s3_key_log_file'])
     if annotation['job_status'] == 'COMPLETED':
         complete_time = float(annotation['complete_time'])
         annotation['complete_time'] = complete_time
-        if (session['role'] == 'free_user' and time.time() - annotation['complete_time'] >= app.config['FREE_USER_DATA_RETENTION']):
+        if (session['role'] == 'free_user' and time.time() - annotation['complete_time'] >= app.config[
+            'FREE_USER_DATA_RETENTION']):
             free_access_expired = True
         annotation['complete_time'] = time.asctime(time.localtime(complete_time))
         annotation['result_file_url'] = create_presigned_download_url(annotation['s3_key_result_file'])
+        if 'is_restored' in annotation.keys() and annotation['is_restored'] == False:
+            annotation['restore_message'] = "Your result files are currently in the restore process, please be patient while waiting."
 
     return render_template('annotation_details.html', annotation=annotation, free_access_expired=free_access_expired)
 
 
 """Display the log file contents for an annotation job
 """
+
+
 # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.get_object
 # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Object.get
 @app.route('/annotations/<id>/log', methods=['GET'])
 @authenticated
 def annotation_log(id):
-
     bucket_name = app.config['AWS_S3_RESULTS_BUCKET']
 
     try:
@@ -282,6 +287,23 @@ def subscribe():
         # Add code here to initiate restoration of archived user data
         # Make sure you handle files not yet archived!
 
+        message = str({
+            'user_id': session['primary_identity']
+        })
+
+        # Publish SNS message to restore queue
+        try:
+            sns.publish(
+                TopicArn=app.config("AWS_SNS_RESTORE_TOPIC"),
+                Message=message
+            )
+        except botocore.exceptions.ClientError as e:  # Topic not found
+            print({
+                'code': 'HTTP_500_INTERNAL_SERVER_ERROR',
+                'status': 'error',
+                'message': 'Error publishing restoring requests to sqs queue'
+            })
+
         # Display confirmation page
         return render_template('subscribe_confirm.html')
 
@@ -300,10 +322,11 @@ def unsubscribe():
     )
     return redirect(url_for('profile'))
 
+
 # Helper Functions
 
- # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.generate_presigned_url
-def  create_presigned_download_url(result_object_key):
+# https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.generate_presigned_url
+def create_presigned_download_url(result_object_key):
     s3 = boto3.client('s3',
                       region_name=app.config['AWS_REGION_NAME'],
                       config=Config(signature_version='s3v4'))
