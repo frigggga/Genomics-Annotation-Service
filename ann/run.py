@@ -6,12 +6,16 @@ import botocore
 from configparser import ConfigParser
 import driver
 
+
 """A rudimentary timer for coarse-grained profiling
 """
 
 CONFIG_FILE = '/home/ec2-user/mpcs-cc/gas/ann/ann_config.ini'
 config = ConfigParser()
 config.read_file(open(CONFIG_FILE))
+
+sys.path.insert(1, config.get('SYSTEM', 'HelpersModuleFilePath'))
+import helpers
 
 
 class Timer(object):
@@ -99,7 +103,7 @@ if __name__ == '__main__':
 
         try:  # Publish SNS message
             response = sns.publish(
-                TopicArn=config.get('AWS', 'AWS_SNS_JOB_COMPLETE_TOPIC'),
+                TopicArn=config.get('AWS', 'SNSJobCompleteTopic'),
                 Message=message
             )
         except botocore.exceptions.ClientError as e:  # Topic not found
@@ -108,6 +112,20 @@ if __name__ == '__main__':
                 'status': 'error',
                 'message': 'Error publishing file annotation results to sqs queue'
             })
+
+        # Archive results to glacier vault
+        profile = helpers.get_user_profile(id=user_id)  # Shitty utility return value
+        if profile['role'] == 'free_user':
+            sqs = boto3.client('sqs')
+            sqs.send_message(
+                QueueUrl=config.get('AWS', 'SQSArchiveQueueUrl'),  # Default queue delay is 5 minutes
+                MessageBody=str({
+                    'user_id': user_id,
+                    'job_id': job_id,
+                    's3_key_result_file': result_file_name})
+            )
+        else:
+            pass
 
     else:
         print("A valid .vcf file must be provided as input to this program.")

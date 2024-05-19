@@ -18,14 +18,13 @@ if not os.path.exists(jobs_dir):
 
 CONFIG_FILE = '/home/ec2-user/mpcs-cc/gas/ann/ann_config.ini'
 def process_annotations():
-    sqs = boto3.client('sqs', region_name='us-east-1')
     config = ConfigParser()
     config.read_file(open(CONFIG_FILE))
 
-    queue_name = config.get('AWS', 'SQSRequestsQueueName')
-    # queue_name_dlq = config.get('AWS', 'SQSRequestsDLQQueueName')
-
     try:
+        sqs = boto3.client('sqs', region_name='us-east-1')
+        queue_name = config.get('AWS', 'SQSRequestsQueueName')
+        # queue_name_dlq = config.get('AWS', 'SQSRequestsDLQQueueName')
         queue_url = sqs.get_queue_url(QueueName=queue_name)['QueueUrl']
         #TODO: what is urldql?
         # url_dql = sqs.get_queue_url(QueueName=queue_name_dlq)['QueueUrl']
@@ -33,7 +32,7 @@ def process_annotations():
         print({
             'code': 500,
             'status': 'Server Error',
-            'message': f'An error occurred: {e}'
+            'message': f'Queue not found: {e}'
         })
 
     print('... checking for messages ...')
