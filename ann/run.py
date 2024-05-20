@@ -94,10 +94,10 @@ if __name__ == '__main__':
         # Send user email notifications
         sns = boto3.client('sns')
         message = str({
-            'filename': sys.argv[1],
-            'job_id': job_id,
-            'user_email': user_email,
-            'job_status': 'COMPLETED'
+            'filename': str(sys.argv[1]),
+            'job_id': str(job_id),
+            'user_email': str(user_email),
+            'job_status': "COMPLETED"
 
         })
 
@@ -106,6 +106,9 @@ if __name__ == '__main__':
                 TopicArn=config.get('AWS', 'SNSJobCompleteTopic'),
                 Message=message
             )
+            print({
+                'send job complete message success'
+            })
         except botocore.exceptions.ClientError as e:  # Topic not found
             print({
                 'code': 'HTTP_500_INTERNAL_SERVER_ERROR',
@@ -114,16 +117,19 @@ if __name__ == '__main__':
             })
 
         # Archive results to glacier vault
-        profile = helpers.get_user_profile(id=user_id)  # Shitty utility return value
+        profile = helpers.get_user_profile(id=user_id)
         if profile['role'] == 'free_user':
             sqs = boto3.client('sqs')
             sqs.send_message(
-                QueueUrl=config.get('AWS', 'SQSArchiveQueueUrl'),  # Default queue delay is 5 minutes
+                QueueUrl=config.get('AWS', 'SQSArchiveQueueUrl'),
                 MessageBody=str({
-                    'user_id': user_id,
-                    'job_id': job_id,
-                    's3_key_result_file': result_file_name})
+                    'user_id': str(user_id),
+                    'job_id': str(job_id),
+                    's3_key_result_file': str(result_file_name)})
             )
+            print({
+                'archive queue send message success'
+            })
         else:
             pass
 

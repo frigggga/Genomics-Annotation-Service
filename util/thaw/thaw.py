@@ -29,7 +29,7 @@ def thaw():
     try:
         sqs = boto3.client('sqs', region_name=config['aws']['AwsRegionName'])
         s3 = boto3.client('s3', region_name=config['aws']['AwsRegionName'])
-        dynamodb = boto3.client('dynamodb', region_name=config['aws']['AwsRegionName'])
+        dynamodb = boto3.resource('dynamodb', region_name=config['aws']['AwsRegionName'])
         glacier = boto3.client('glacier', region_name=config['aws']['AwsRegionName'])
         queue_name = config.get('aws', 'SQSThawQueueName')
         queue_url = sqs.get_queue_url(QueueName=queue_name)['QueueUrl']
@@ -46,61 +46,74 @@ def thaw():
         try:
             #  read a message from the sqs queue
             queue = sqs.receive_message(
-                QueueUrl=queue_url, AttributeNames=['All'], MaxNumberOfMessages=1,
+                QueueUrl=queue_url, AttributeNames=['All'], MaxNumberOfMessages=5,
                 WaitTimeSeconds=20
             )
-            receipt_handle = queue["Messages"][0]["ReceiptHandle"]
-            message_json = json.loads(queue["Messages"][0]["Body"])
-            message = ast.literal_eval(message_json["Message"])
-            restore_job_id = message['JobId']
-            info = json.loads(message['JobDescription'])
-            job_id = info['job_id']
-            s3_result_key = info['s3_key_result_file']
         except KeyError:
             # since there's no messages in the queue, keep listening...
             continue
 
-        print(message)
-
-        # Get job archive data
+        # Check #num messages received
         try:
-            job_status = glacier.describe_job(vaultName=config['aws']['VaultName'], jobId=restore_job_id)
-
-            if job_status['Completed']:
-                job_output = glacier.get_job_output(vaultName=config['aws']['VaultName'], jobId=restore_job_id)
-                archive_data = job_output['body'].read()
-
-        except botocore.exceptions.ClientError as e:
-            print(e)
+            messages = queue['Messages']
+            if len(messages) == 0:
+                continue
+        except KeyError:
             continue
 
-        # Upload file to s3
-        try:
-            s3.put_object(
-                Body=archive_data,
-                Bucket=config['aws']['ResultBucket'],
-                Key=s3_result_key
-            )
-        except botocore.exceptions.ClientError as e:
-            print(e)
-            continue
+        for m in messages:
+            receipt_handle = m["ReceiptHandle"]
+            message_json = ast.literal_eval(m["Body"])
+            message = json.loads(message_json["Message"])
+            restore_job_id = message['JobId']
+            description = ast.literal_eval(message['JobDescription'])
+            job_id = description['job_id']
+            s3_result_key = description['s3_key_result_file']
+            print('---message received------')
 
-        # Update Dynamodb is_restored status to true
-        try:
-            ann_table = dynamodb.Table(config['aws']['DynamoDBTable'])
-            ann_table.update_item(Key={'job_id': job_id},
-                                  UpdateExpression="set is_restored = :r",
-                                  ExpressionAttributeValues={
-                                      ':r': True
-                                  },
-                                  ReturnValues="UPDATED_NEW"
-                                  )
+            # Get job archive data
+            try:
+                job_status = glacier.describe_job(vaultName=config['aws']['VaultName'], jobId=restore_job_id)
 
-        except botocore.exceptions.ClientError as e:
-            print(e)
-            continue
+                if job_status['Completed']:
+                    job_output = glacier.get_job_output(vaultName=config['aws']['VaultName'], jobId=restore_job_id)
+                    archive_data = job_output['body'].read()
+                    print('---get archived data from galcier------')
 
-        sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+            except botocore.exceptions.ClientError as e:
+                print(e)
+                continue
+
+            # Upload file to s3
+            try:
+                s3.put_object(
+                    Body=archive_data,
+                    Bucket=config['aws']['ResultsBucket'],
+                    Key=s3_result_key
+                )
+                print('---uploaded file to s3------')
+            except botocore.exceptions.ClientError as e:
+                print(e)
+                continue
+
+            # Update Dynamodb is_restored status to true
+            try:
+                ann_table = dynamodb.Table(config['aws']['DynamoDBTable'])
+                ann_table.update_item(Key={'job_id': job_id},
+                                      UpdateExpression="set is_restored = :r",
+                                      ExpressionAttributeValues={
+                                          ':r': True
+                                      },
+                                      ReturnValues="UPDATED_NEW"
+                                      )
+                print('---dynamodb is_restored updated------')
+
+            except botocore.exceptions.ClientError as e:
+                print(e)
+                continue
+
+            sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+            print('message deleted')
 
 
 if __name__ == '__main__':

@@ -24,10 +24,8 @@ def process_annotations():
     try:
         sqs = boto3.client('sqs', region_name='us-east-1')
         queue_name = config.get('AWS', 'SQSRequestsQueueName')
-        # queue_name_dlq = config.get('AWS', 'SQSRequestsDLQQueueName')
         queue_url = sqs.get_queue_url(QueueName=queue_name)['QueueUrl']
-        #TODO: what is urldql?
-        # url_dql = sqs.get_queue_url(QueueName=queue_name_dlq)['QueueUrl']
+
     except botocore.exceptions.ClientError as e:  # Queue Not Found
         print({
             'code': 500,

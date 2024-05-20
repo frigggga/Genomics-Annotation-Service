@@ -14,6 +14,7 @@ import json
 from datetime import datetime
 
 import boto3
+import os
 import botocore
 from boto3.dynamodb.conditions import Key
 from botocore.client import Config
@@ -71,6 +72,11 @@ def annotate():
     ]
 
     # Generate the presigned POST call
+
+    s3 = boto3.client('s3',
+                      region_name=app.config['AWS_REGION_NAME'],
+                      config=Config(signature_version='s3v4'))
+
     try:
         presigned_post = s3.generate_presigned_post(
             Bucket=bucket_name,
@@ -204,20 +210,24 @@ def annotation_details(id):
     if annotation['user_id'] != session['primary_identity']:
         abort(403)
 
+    free_access_expired = False
+    os.environ['TZ'] = 'America/Chicago'
+    time.tzset()
     annotation['submit_time'] = time.asctime(time.localtime(float(annotation['submit_time'])))
 
-    free_access_expired = False
-    app.logger.info(annotation['s3_key_log_file'])
     if annotation['job_status'] == 'COMPLETED':
         complete_time = float(annotation['complete_time'])
         annotation['complete_time'] = complete_time
-        if (session['role'] == 'free_user' and time.time() - annotation['complete_time'] >= app.config[
-            'FREE_USER_DATA_RETENTION']):
+
+        if (session['role'] == 'free_user' and time.time() - annotation['complete_time'] >= app.config['FREE_USER_DATA_RETENTION']):
             free_access_expired = True
+
+        if 'is_restored' in annotation.keys() and annotation['is_restored'] == False:
+            annotation['restore_message'] = \
+                "Your result files are currently in the restore process, please be patient while waiting."
+
         annotation['complete_time'] = time.asctime(time.localtime(complete_time))
         annotation['result_file_url'] = create_presigned_download_url(annotation['s3_key_result_file'])
-        if 'is_restored' in annotation.keys() and annotation['is_restored'] == False:
-            annotation['restore_message'] = "Your result files are currently in the restore process, please be patient while waiting."
 
     return render_template('annotation_details.html', annotation=annotation, free_access_expired=free_access_expired)
 
@@ -294,7 +304,7 @@ def subscribe():
         # Publish SNS message to restore queue
         try:
             sns.publish(
-                TopicArn=app.config("AWS_SNS_RESTORE_TOPIC"),
+                TopicArn=app.config['AWS_SNS_RESTORE_TOPIC'],
                 Message=message
             )
         except botocore.exceptions.ClientError as e:  # Topic not found

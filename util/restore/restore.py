@@ -13,6 +13,7 @@ import boto3
 import botocore
 import json
 import ast
+from boto3.dynamodb.conditions import Key
 
 # Import utility helpers
 sys.path.insert(1, os.path.realpath(os.path.pardir))
@@ -45,68 +46,84 @@ def restore():
         try:
             #  read a message from the sqs queue
             queue = sqs.receive_message(
-                QueueUrl=queue_url, AttributeNames=['All'], MaxNumberOfMessages=1,
+                QueueUrl=queue_url, AttributeNames=['All'], MaxNumberOfMessages=5,
                 WaitTimeSeconds=20
             )
-            receipt_handle = queue["Messages"][0]["ReceiptHandle"]
-            message_json = json.loads(queue["Messages"][0]["Body"])
-            message = ast.literal_eval(message_json["Message"])
+
         except KeyError:
             # since there's no messages in the queue, keep listening...
             continue
 
-        user_id = message['user_id']
-
-        # Get list of annotations to display
+        # Check #num messages received
         try:
-            ann_table = dynamodb.Table(config['aws']['DynamoDBTable'])
-            response = ann_table.query(
-                IndexName='user_id_index',
-                KeyConditionExpression=Key('user_id').eq(user_id)
-            )
+            messages = queue['Messages']
+            if len(messages) == 0:
+                continue
+        except KeyError:
+            continue
 
-        except botocore.exceptions.ClientError as e:
-            print(e)
+        for m in messages:
+            receipt_handle = m["ReceiptHandle"]
+            message_json = json.loads(m["Body"])
+            message = ast.literal_eval(message_json["Message"])
+            user_id = message['user_id']
 
-        jobs = response['Items']
-        for job in jobs:
-            if 'archive_id' in job.keys() and job['is_restored'] is False:
+            print('----receiving messages-----')
 
-                description = str({
-                    'job_id': job['job_id'],
-                    's3_key_result_file': job['s3_key_result_file']
-                })
+            # Get list of annotations to display
+            # https: // boto3.amazonaws.com / v1 / documentation / api / latest / guide / dynamodb.html  # querying-and-scanning
+            try:
+                ann_table = dynamodb.Table(config['aws']['DynamoDBTable'])
+                response = ann_table.query(
+                    IndexName='user_id_index',
+                    KeyConditionExpression=Key('user_id').eq(user_id)
+                )
 
-                job_parameters = {
-                    'Type': 'archive-retrieval',
-                    'ArchiveId': job['archive_id'],
-                    'SNSTopic': config['aws']['SNSThawTopic'],
-                    'Tier': 'Expedited',
-                    'Description': description
-                }
+            except botocore.exceptions.ClientError as e:
+                print(e)
+                continue
 
-                # Create glacier restore jobs
-                try:
-                    job_response = glacier.initiate_job(vaultName=config.get('VaultName'), jobParameters=job_parameters)
-                    restore_job_id = job_response['jobId']
+            jobs = response['Items']
+            for job in jobs:
+                if 'archive_id' in job.keys() and job['is_restored'] is False:
 
-                except:  # Graceful degradation
+                    description = str({
+                        'job_id': job['job_id'],
+                        's3_key_result_file': job['s3_key_result_file']
+                    })
+
+                    job_parameters = {
+                        'Type': 'archive-retrieval',
+                        'ArchiveId': job['archive_id'],
+                        'SNSTopic': config['aws']['SNSThawTopic'],
+                        'Tier': 'Expedited',
+                        'Description': description
+                    }
+
+                    # Create glacier restore jobs
                     try:
-                        response = glacier.initiate_job(
-                            vaultName=config['aws']['VAULT_NAME'],
-                            jobParameters={
-                                'Type': "archive-retrieval",
-                                'ArchiveId': job['archive_id'],
-                                'SNSTopic': config['aws']['SNSThawTopic'],
-                                'Tier': 'Standard',
-                                'Description': description
-                            }
-                        )
-                    except botocore.exceptions.ClientError as e:
-                        print(e)
-                        continue
+                        job_response = glacier.initiate_job(vaultName=['aws']['VaultName'], jobParameters=job_parameters)
+                        print(f"expedited restore archive job successfully created with restore job id: {job_response['jobId']}")
 
-        sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+                    except:  # Graceful degradation
+                        try:
+                            job_response = glacier.initiate_job(
+                                vaultName=config['aws']['VaultName'],
+                                jobParameters={
+                                    'Type': "archive-retrieval",
+                                    'ArchiveId': job['archive_id'],
+                                    'SNSTopic': config['aws']['SNSThawTopic'],
+                                    'Tier': 'Standard',
+                                    'Description': description
+                                }
+                            )
+                            print(f"standard restore archive job successfully created with restore job id: {job_response['jobId']}")
+                        except botocore.exceptions.ClientError as e:
+                            print(e)
+                            continue
+
+            sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+            print('message deleted')
 
 ### EOF
 
