@@ -11,6 +11,7 @@ __author__ = 'Vas Vasiliadis <vas@uchicago.edu>'
 import uuid
 import time
 import json
+import pytz
 from datetime import datetime
 
 import boto3
@@ -106,6 +107,7 @@ homework assignments
 @authenticated
 def create_annotation_job_request():
     # Get bucket name, key, and job ID from the S3 redirect URL
+
     bucket_name = str(request.args.get('bucket'))
     s3_key = str(request.args.get('key'))
 
@@ -185,7 +187,7 @@ def annotations_list():
 
     jobs = response['Items']
     for job in jobs:
-        job['submit_time'] = time.asctime(time.localtime(float(job['submit_time'])))
+        job['submit_time'] = get_chicago_time(job['submit_time'])
 
     return render_template('annotations.html', annotations=jobs)
 
@@ -211,9 +213,7 @@ def annotation_details(id):
         abort(403)
 
     free_access_expired = False
-    os.environ['TZ'] = 'America/Chicago'
-    time.tzset()
-    annotation['submit_time'] = time.asctime(time.localtime(float(annotation['submit_time'])))
+    annotation['submit_time'] = get_chicago_time(annotation['submit_time'])
 
     if annotation['job_status'] == 'COMPLETED':
         complete_time = float(annotation['complete_time'])
@@ -226,7 +226,7 @@ def annotation_details(id):
             annotation['restore_message'] = \
                 "Your result files are currently in the restore process, please be patient while waiting."
 
-        annotation['complete_time'] = time.asctime(time.localtime(complete_time))
+        annotation['complete_time'] = get_chicago_time(annotation['complete_time'])
         annotation['result_file_url'] = create_presigned_download_url(annotation['s3_key_result_file'])
 
     return render_template('annotation_details.html', annotation=annotation, free_access_expired=free_access_expired)
@@ -357,6 +357,12 @@ def create_presigned_download_url(result_object_key):
 
     return response
 
+
+def get_chicago_time(timestamp):
+    utc_time = datetime.utcfromtimestamp(float(timestamp)).replace(tzinfo=pytz.utc)
+    chicago_tz = pytz.timezone('America/Chicago')
+    chicago_time = utc_time.astimezone(chicago_tz)
+    return chicago_time.strftime('%a %b %d %H:%M:%S %Y')
 
 """DO NOT CHANGE CODE BELOW THIS LINE
 *******************************************************************************

@@ -89,6 +89,7 @@ def restore():
 
                     description = str({
                         'job_id': job['job_id'],
+                        'archive_id': job['archive_id'],
                         's3_key_result_file': job['s3_key_result_file']
                     })
 

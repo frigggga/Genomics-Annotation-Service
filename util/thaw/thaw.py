@@ -68,30 +68,37 @@ def thaw():
             restore_job_id = message['JobId']
             description = ast.literal_eval(message['JobDescription'])
             job_id = description['job_id']
+            archive_id = description['archive_id']
             s3_result_key = description['s3_key_result_file']
             print('---message received------')
 
             # Get job archive data
+            # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/glacier/client/delete_archive.html
             try:
                 job_status = glacier.describe_job(vaultName=config['aws']['VaultName'], jobId=restore_job_id)
 
                 if job_status['Completed']:
                     job_output = glacier.get_job_output(vaultName=config['aws']['VaultName'], jobId=restore_job_id)
                     archive_data = job_output['body'].read()
-                    print('---get archived data from galcier------')
+                    print('---get archived data from glacier------')
 
             except botocore.exceptions.ClientError as e:
                 print(e)
                 continue
 
-            # Upload file to s3
+            # Delete archive inside Glacier and upload file to s3
             try:
+                glacier.delete_archive(
+                    vaultName=config['aws']['VaultName'],
+                    archiveId=archive_id
+                )
+
                 s3.put_object(
                     Body=archive_data,
                     Bucket=config['aws']['ResultsBucket'],
                     Key=s3_result_key
                 )
-                print('---uploaded file to s3------')
+                print('---deleted glacier archive and uploaded file to s3------')
             except botocore.exceptions.ClientError as e:
                 print(e)
                 continue

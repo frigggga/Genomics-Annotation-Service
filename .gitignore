@@ -10,7 +10,6 @@ __pycache__/
 # Application data
 log/
 *.log
-*.txt
 !/*requirements.txt
 *.iif
 *.pem
