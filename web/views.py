@@ -222,7 +222,7 @@ def annotation_details(id):
         if (session['role'] == 'free_user' and time.time() - annotation['complete_time'] >= app.config['FREE_USER_DATA_RETENTION']):
             free_access_expired = True
 
-        if 'is_restored' in annotation.keys() and annotation['is_restored'] == False:
+        if 'is_restored' in annotation.keys() and annotation['is_restored'] is False and session['role'] != 'free_user':
             annotation['restore_message'] = \
                 "Your result files are currently in the restore process, please be patient while waiting."
 

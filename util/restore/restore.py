@@ -102,6 +102,7 @@ def restore():
                     }
 
                     # Create glacier restore jobs
+                    # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/glacier/client/initiate_job.html
                     try:
                         job_response = glacier.initiate_job(vaultName=['aws']['VaultName'], jobParameters=job_parameters)
                         print(f"expedited restore archive job successfully created with restore job id: {job_response['jobId']}")
