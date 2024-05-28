@@ -1,7 +1,17 @@
-# gas-framework
-An enhanced web framework (based on [Flask](http://flask.pocoo.org/)) for use in the capstone project. Adds robust user authentication (via [Globus Auth](https://docs.globus.org/api/auth)), modular templates, and some simple styling based on [Bootstrap](http://getbootstrap.com/).
+## Description
+This is a scalable bioinformatic genomics annotation microservice that featured aws automated scaling and secure data handling.
+•	Utilized AWS service such as EC2 in hosting frontend and backend services, leveraging autoscaling groups with ELB to ensure high availability and scalability.
+•	Implemented robust user authentication and premium subscription features through Flask and Globus Auth.
+•	Leveraged DynamoDB, PostgreSQL, Glacier and S3 for data storage, Lambda for real-time user email notifications, and SNS/SQS for async inter-service communication.
+•	Ensured high availability and performance under load that effectively improved operational efficiency and user satisfaction.
 
-Directory contents are as follows:
+## Website Preview
+![gas-1.png](aws%2Fgas-1.png)
+![gas-2.png](aws%2Fgas-2.png)
+![gas-3.png](aws%2Fgas-3.png)
+![gas-4.png](aws%2Fgas-4.png)
+
+## Directory contents are as follows:
 * `/web` - The GAS web app files
 * `/ann` - Annotator files
 * `/util` - Utility scripts for notifications, archival, and restoration
@@ -18,6 +28,3 @@ Directory contents are as follows:
   * If it receives a message, it then gets the userid from the message, and query all annotation jobs associated with this userid. In a for loop, the function checks if this job has an archive id but has not been restored. 
   * If it's in this case, the function will initiate a glacier job of type 'archive_retrieval'. The retrieval job will first attempt to use the expedited version, and degrade to standard version otherwise.
   * If all actions performing successfully, the message will be deleted from the sqs queue to indicate job done.
-## Additional Notes
-* All required tasks are implemented.
-* No attempt to do the optional tasks.
