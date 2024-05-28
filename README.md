@@ -1,8 +1,12 @@
 ## Description
 This is a scalable bioinformatic genomics annotation microservice that featured aws automated scaling and secure data handling.
+
 •	Utilized AWS service such as EC2 in hosting frontend and backend services, leveraging autoscaling groups with ELB to ensure high availability and scalability.
+
 •	Implemented robust user authentication and premium subscription features through Flask and Globus Auth.
+
 •	Leveraged DynamoDB, PostgreSQL, Glacier and S3 for data storage, Lambda for real-time user email notifications, and SNS/SQS for async inter-service communication.
+
 •	Ensured high availability and performance under load that effectively improved operational efficiency and user satisfaction.
 
 ## Website Preview
